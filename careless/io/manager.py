@@ -376,6 +376,8 @@ class DataManager():
             if parser.refine_uncertainties:
                 from careless.models.likelihoods.mono import NormalEv11Likelihood as NormalLikelihood
                 from careless.models.likelihoods.mono import StudentTEv11Likelihood as StudentTLikelihood
+            elif parser.multi_xtal_weighting:
+                from careless.models.likelihoods.mono import NormalWeightedLikelihood as NormalLikelihood
             else:
                 from careless.models.likelihoods.mono import NormalLikelihood,StudentTLikelihood
 
@@ -397,8 +399,12 @@ class DataManager():
 
         if likelihood is None:
             dof = parser.studentt_likelihood_dof
+            nxtals = BaseModel.get_file_id(self.inputs).max() + 1
             if dof is None:
-                likelihood = NormalLikelihood()
+                if parser.multi_xtal_weighting:
+                    likelihood = NormalLikelihood(nxtals)
+                else:
+                    likelihood = NormalLikelihood()
             else:
                 likelihood = StudentTLikelihood(dof)
 

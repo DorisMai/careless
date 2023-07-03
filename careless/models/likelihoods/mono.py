@@ -1,4 +1,4 @@
-from careless.models.likelihoods.base import Likelihood
+from careless.models.likelihoods.base import Likelihood, BaseModel
 import tensorflow as tf
 from tensorflow_probability import distributions as tfd
 from tensorflow_probability import util as tfu
@@ -105,4 +105,42 @@ class NeuralLikelihood(Likelihood):
 
 class NeuralNormalLikelihood(NeuralLikelihood):
     def base_dist(self, loc, scale):
+        return tfd.Normal(loc, scale)
+
+class WeightedLikelihoodDistribution(BaseModel):
+    def __init__(self, base_distribution, weights):
+        super().__init__()
+        self.base_distribution = base_distribution
+        self.xtal_weights = weights
+
+    def log_prob(self, data):
+        return self.xtal_weights * self.base_distribution.log_prob(data)
+
+class WeightedLikelihood(LocationScaleLikelihood):
+    def __init__(self, num_files):
+        super().__init__()
+        self.num_files = num_files
+        self.raw_wc = self.add_weight(shape=(self.num_files - 1,), initializer="zeros",
+                                      trainable=True, dtype=tf.float32, name='raw_wc')
+
+    @property
+    def norm_wc(self):
+        return tf.nn.softmax(tf.concat([tf.constant([0.], dtype=tf.float32), self.raw_wc], axis=0))
+
+    def distribution(self, loc, scale):
+        raise NotImplementedError("Weighted likelihoods must implement self.distribution \
+                                  which should have a log_prob method.")
+
+    def call(self, inputs):
+        loc, scale = self.get_loc_and_scale(inputs)
+        file_ids = self.get_file_id(inputs)
+        xtal_wc = tf.gather(self.norm_wc, file_ids) * self.num_files
+        base_dist = self.distribution(loc, scale)
+        likelihood = WeightedLikelihoodDistribution(base_dist, xtal_wc)
+        for i in range(self.num_files):
+            self.add_metric(self.norm_wc[i], name=f'norm_wc_{i}')
+        return likelihood
+    
+class NormalWeightedLikelihood(WeightedLikelihood):
+    def distribution(self, loc, scale):
         return tfd.Normal(loc, scale)

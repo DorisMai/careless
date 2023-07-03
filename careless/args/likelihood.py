@@ -14,5 +14,11 @@ args_and_kwargs = (
         "action":'store_true', 
         "default":False,
     }),
+
+    (("--multi_xtal_weighting",), {
+        "help":"Learn per-crystal weights for the likelihood.",
+        "action":'store_true',
+        "default":False,
+    })
 )
 
