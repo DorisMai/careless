@@ -114,7 +114,8 @@ class WeightedLikelihoodDistribution(BaseModel):
         self.xtal_weights = weights
 
     def log_prob(self, data):
-        return self.xtal_weights * self.base_distribution.log_prob(data)
+        reshaped_weights = tf.broadcast_to(tf.transpose(self.xtal_weights), data.shape)
+        return reshaped_weights * self.base_distribution.log_prob(data)
 
 class WeightedLikelihood(LocationScaleLikelihood):
     def __init__(self, num_files):
