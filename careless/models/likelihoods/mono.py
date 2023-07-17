@@ -145,3 +145,11 @@ class WeightedLikelihood(LocationScaleLikelihood):
 class NormalWeightedLikelihood(WeightedLikelihood):
     def distribution(self, loc, scale):
         return tfd.Normal(loc, scale)
+
+class StudentTWeightedLikelihood(WeightedLikelihood):
+    def __init__(self, dof, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.dof = dof
+
+    def distribution(self, loc, scale):
+        return tfd.StudentT(self.dof, loc, scale)

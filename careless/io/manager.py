@@ -400,6 +400,7 @@ class DataManager():
                 from careless.models.likelihoods.mono import StudentTEv11Likelihood as StudentTLikelihood
             elif parser.multi_xtal_weighting:
                 from careless.models.likelihoods.mono import NormalWeightedLikelihood as NormalLikelihood
+                from careless.models.likelihoods.mono import StudentTWeightedLikelihood as StudentTLikelihood
             else:
                 from careless.models.likelihoods.mono import NormalLikelihood,StudentTLikelihood
 
@@ -428,7 +429,10 @@ class DataManager():
                 else:
                     likelihood = NormalLikelihood()
             else:
-                likelihood = StudentTLikelihood(dof)
+                if parser.multi_xtal_weighting:
+                    likelihood = StudentTLikelihood(dof, nxtals)
+                else:
+                    likelihood = StudentTLikelihood(dof)
 
         if scaling_model is None:
             mlp_width = parser.mlp_width
