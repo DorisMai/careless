@@ -108,21 +108,25 @@ class NeuralNormalLikelihood(NeuralLikelihood):
         return tfd.Normal(loc, scale)
 
 class WeightedLikelihoodDistribution(BaseModel):
-    def __init__(self, base_distribution, weights):
+    def __init__(self, base_distribution, wc_distribution, file_ids, num_files):
         super().__init__()
         self.base_distribution = base_distribution
-        self.xtal_weights = weights
+        self.wc_distribution = wc_distribution
+        self.file_ids = file_ids
+        self.num_files = num_files
 
     def log_prob(self, data):
-        reshaped_weights = tf.broadcast_to(tf.transpose(self.xtal_weights), data.shape)
+        mcsamples = data.shape[0]
+        xtal_weights = self.wc_distribution.sample(mcsamples) * self.num_files
+        reshaped_weights = tf.squeeze(tf.gather(xtal_weights, self.file_ids, axis=1))
         return reshaped_weights * self.base_distribution.log_prob(data)
 
 class WeightedLikelihood(LocationScaleLikelihood):
     def __init__(self, num_files):
         super().__init__()
         self.num_files = num_files
-        self.raw_wc = self.add_weight(shape=(self.num_files - 1,), initializer="zeros",
-                                      trainable=True, dtype=tf.float32, name='raw_wc')
+        self.wc_dist = tfd.Dirichlet(concentration=tf.Variable(tf.ones((self.num_files,)), 
+                                                               dtype=tf.float32), name='norm_wc')
 
     @property
     def norm_wc(self):
@@ -135,11 +139,10 @@ class WeightedLikelihood(LocationScaleLikelihood):
     def call(self, inputs):
         loc, scale = self.get_loc_and_scale(inputs)
         file_ids = self.get_file_id(inputs)
-        xtal_wc = tf.gather(self.norm_wc, file_ids) * self.num_files
         base_dist = self.distribution(loc, scale)
-        likelihood = WeightedLikelihoodDistribution(base_dist, xtal_wc)
+        likelihood = WeightedLikelihoodDistribution(base_dist, self.wc_dist, file_ids, self.num_files)
         for i in range(self.num_files):
-            self.add_metric(self.norm_wc[i], name=f'norm_wc_{i}')
+            self.add_metric(self.wc_dist.concentration[i], name=f'alpha_{i}')
         return likelihood
     
 class NormalWeightedLikelihood(WeightedLikelihood):
