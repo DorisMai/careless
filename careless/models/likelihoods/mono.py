@@ -126,8 +126,8 @@ class WeightedLikelihood(LocationScaleLikelihood):
         super().__init__()
         self.num_files = num_files
         self.wc_dist = tfd.Dirichlet(concentration=tfu.TransformedVariable(tf.ones((self.num_files,)), 
-                                                                           tfb.Chain([tfb.Exp(),
-                                                                                      tfb.Shift(scale_shift)]),
+                                                                           tfb.Chain([tfb.Shift(scale_shift), 
+                                                                                      tfb.Exp()]),
                                                                            dtype=tf.float32),  
                                                                            name='norm_wc')
 
