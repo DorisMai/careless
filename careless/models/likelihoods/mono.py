@@ -122,11 +122,14 @@ class WeightedLikelihoodDistribution(BaseModel):
         return reshaped_weights * self.base_distribution.log_prob(data)
 
 class WeightedLikelihood(LocationScaleLikelihood):
-    def __init__(self, num_files):
+    def __init__(self, num_files, scale_shift=1e-7):
         super().__init__()
         self.num_files = num_files
-        self.wc_dist = tfd.Dirichlet(concentration=tf.Variable(tf.ones((self.num_files,)), 
-                                                               dtype=tf.float32), name='norm_wc')
+        self.wc_dist = tfd.Dirichlet(concentration=tfu.TransformedVariable(tf.ones((self.num_files,)), 
+                                                                           tfb.Chain([tfb.Exp(),
+                                                                                      tfb.Shift(scale_shift)]),
+                                                                           dtype=tf.float32),  
+                                                                           name='norm_wc')
 
     @property
     def norm_wc(self):
@@ -143,6 +146,8 @@ class WeightedLikelihood(LocationScaleLikelihood):
         likelihood = WeightedLikelihoodDistribution(base_dist, self.wc_dist, file_ids, self.num_files)
         for i in range(self.num_files):
             self.add_metric(self.wc_dist.concentration[i], name=f'alpha_{i}')
+        for i in range(self.num_files):
+            self.add_metric(self.wc_dist.mean()[i], name=f'norm_wc_{i}')
         return likelihood
     
 class NormalWeightedLikelihood(WeightedLikelihood):
