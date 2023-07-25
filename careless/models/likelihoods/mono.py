@@ -122,7 +122,7 @@ class WeightedLikelihoodDistribution(BaseModel):
         return reshaped_weights * self.base_distribution.log_prob(data)
 
 class WeightedLikelihood(LocationScaleLikelihood):
-    def __init__(self, num_files, scale_shift=1e-7):
+    def __init__(self, num_files, scale_shift=0.1):
         super().__init__()
         self.num_files = num_files
         self.wc_dist = tfd.Dirichlet(concentration=tfu.TransformedVariable(tf.ones((self.num_files,)), 
