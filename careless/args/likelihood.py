@@ -19,6 +19,13 @@ args_and_kwargs = (
         "help":"Learn per-crystal weights for the likelihood.",
         "action":'store_true',
         "default":False,
+    }),
+
+    (("--wc-regularize-weight",), {
+        "help": "Set the weight of the term that regularizes crystal weights. "
+                "By default, there is no regularization.",
+        "type": float, 
+        "default": 0.0,
     })
 )
 

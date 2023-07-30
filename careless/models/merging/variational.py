@@ -12,7 +12,8 @@ class VariationalMergingModel(tfk.Model, BaseModel):
     """
     Merge data with a posterior parameterized by a surrogate distribution.
     """
-    def __init__(self, surrogate_posterior, prior, likelihood, scaling_model, mc_sample_size=1, kl_weight=None, scale_kl_weight=None, scale_prior=None):
+    def __init__(self, surrogate_posterior, prior, likelihood, scaling_model, mc_sample_size=1, wc_weight=0,
+                 kl_weight=None, scale_kl_weight=None, scale_prior=None):
         """"
         Parameters
         ----------
@@ -33,6 +34,8 @@ class VariationalMergingModel(tfk.Model, BaseModel):
             An instance of a class from carless.model.scaling 
         mc_sample_size : int (optional)
             This sets how many reparameterized samples will be used to compute the loss function.
+        wc_weight : float (optional)
+            This sets the strength of penalty/constraints of crystal weights.
         """
         super().__init__()
         self.prior = prior
@@ -41,6 +44,7 @@ class VariationalMergingModel(tfk.Model, BaseModel):
         self.scaling_model = scaling_model
         self.mc_sample_size = mc_sample_size
         self.kl_weight = kl_weight
+        self.wc_weight = wc_weight
         self.scale_kl_weight = scale_kl_weight
         self.scale_prior = scale_prior
 
@@ -175,6 +179,11 @@ class VariationalMergingModel(tfk.Model, BaseModel):
         else:
             self.add_kl_div(self.surrogate_posterior, self.prior, z_f, weight=self.kl_weight, name='F KLDiv', reduction='mean')
             ll = tf.reduce_mean(ll) 
+
+        if self.wc_weight != 0:
+            wc2 = tf.reduce_sum(self.likelihood.raw_wc ** 2) / self.mc_sample_size * self.wc_weight
+            self.add_loss(wc2)
+            self.add_metric(wc2, name="wc2")
 
         #Do some keras-y stuff
         self.add_loss(-ll)

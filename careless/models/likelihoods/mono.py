@@ -138,8 +138,11 @@ class WeightedLikelihood(LocationScaleLikelihood):
         xtal_wc = tf.gather(self.norm_wc, file_ids) * self.num_files
         base_dist = self.distribution(loc, scale)
         likelihood = WeightedLikelihoodDistribution(base_dist, xtal_wc)
-        for i in range(self.num_files):
-            self.add_metric(self.norm_wc[i], name=f'norm_wc_{i}')
+        for i in range(self.num_files-1):
+            self.add_metric(self.raw_wc[i], name=f'raw_wc_{i}')
+            # self.add_metric(self.norm_wc[i], name=f'norm_wc_{i}')
+        #tf.print(self.norm_wc, summarize=-1, output_stream='file://./logs/norm_weights.log')
+        #tf.print(self.raw_wc, summarize=-1, output_stream='file://./logs/raw_weights.log')
         return likelihood
     
 class NormalWeightedLikelihood(WeightedLikelihood):
