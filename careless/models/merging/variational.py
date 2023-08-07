@@ -3,6 +3,7 @@ from careless.utils.shame import sanitize_tensor
 from careless.models.merging.surrogate_posteriors import TruncatedNormal
 from tqdm.autonotebook import tqdm
 import tensorflow_probability as tfp
+from tensorflow_probability import distributions as tfd
 import tensorflow as tf
 from tensorflow import keras as tfk
 import numpy as np
@@ -181,9 +182,10 @@ class VariationalMergingModel(tfk.Model, BaseModel):
             ll = tf.reduce_mean(ll) 
 
         if self.wc_weight != 0:
-            wc2 = tf.reduce_sum(self.likelihood.raw_wc ** 2) / self.mc_sample_size * self.wc_weight
-            self.add_loss(wc2)
-            self.add_metric(wc2, name="wc2")
+            num_xtals = tf.reduce_max(self.get_file_id(inputs))+1
+            wc_prior = tfd.Categorical(probs=tf.ones(num_xtals) / float(num_xtals))
+            wc_posterior = tfd.Categorical(probs=self.likelihood.norm_wc)
+            self.add_kl_div(wc_posterior, wc_prior, weight=self.wc_weight, name="Wc KLDiv", reduction='mean')
 
         #Do some keras-y stuff
         self.add_loss(-ll)
