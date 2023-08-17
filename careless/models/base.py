@@ -4,7 +4,7 @@ import numpy as np
 
 
 
-class BaseModel(tfk.layers.Layer):
+class BaseModel(tf.keras.models.Model):
     """ 
     Base class for all models in `careless`. 
     It encodes accessors for the standard format inputs to the model. 

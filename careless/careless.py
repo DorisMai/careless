@@ -47,6 +47,11 @@ def run_careless(parser):
     if parser.freeze_structure_factors:
         model.surrogate_posterior.trainable = False
 
+    if parser.xtal_weights_file is not None:
+        model.likelihood.load_weights(parser.xtal_weights_file)
+    if parser.freeze_xtal_wc:
+        model.likelihood.trainable = False
+
     validation_frequency = parser.validation_frequency
     progress = not parser.disable_progress_bar
 
@@ -68,6 +73,8 @@ def run_careless(parser):
 
     model.surrogate_posterior.save_weights(parser.output_base + '_structure_factor')
     model.scaling_model.save_weights(parser.output_base + '_scale')
+    model.likelihood.save_weights(parser.output_base + '_xtal_weights')
+
     import pickle
     with open(parser.output_base + "_data_manager.pickle", "wb") as out:
         pickle.dump(dm, out)

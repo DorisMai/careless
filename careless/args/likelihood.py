@@ -9,6 +9,20 @@ args_and_kwargs = (
         "default":None,
     }),
 
+    (("--xtal-weights-file",), {
+        "help": "Initialize the raw crystal weights for likelihood from the ouput of a previous run. This argument should"
+                "be a string beginning with the base filename used in the previous run and ending in _xtal_weights.  For "
+                "instance, if the previous run was called with `careless mono [...] merge/hewl`, the appropriate file name"
+                "would be merge/hewl_xtal_weights",
+        "type": str,
+        "default": None,
+    }),
+
+    (("--freeze-xtal-wc",), {
+        "help": "Do not optimize the crystal weights in likelihood.",
+        "action": "store_true"
+    }),
+
     (("--refine-uncertainties",), { 
         "help":"Use Evans' 2011 error model from SCALA to correct uncertainties.",
         "action":'store_true', 

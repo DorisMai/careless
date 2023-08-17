@@ -109,7 +109,7 @@ class NeuralNormalLikelihood(NeuralLikelihood):
 
 class WeightedLikelihoodDistribution(BaseModel):
     def __init__(self, base_distribution, weights):
-        super().__init__()
+        #super().__init__()
         self.base_distribution = base_distribution
         self.xtal_weights = weights
 

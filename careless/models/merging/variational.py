@@ -9,7 +9,7 @@ from tensorflow import keras as tfk
 import numpy as np
 
 
-class VariationalMergingModel(tfk.Model, BaseModel):
+class VariationalMergingModel(BaseModel):
     """
     Merge data with a posterior parameterized by a surrogate distribution.
     """
