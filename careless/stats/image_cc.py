@@ -36,17 +36,15 @@ class ArgumentParser(BaseParser):
         )
 
         self.add_argument(
-            "-b",
-            "--bins",
-            default=10,
-            type=int,
-            help="Number of resolution bins to use, the default is 10.",
+            "--height",
+            default=3,
+            help="Height of the plot to make with default value 3 (inches)."
         )
 
         self.add_argument(
-            '--overall',
-            action="store_true",
-            help="Pool all prediction mtz files into a single calculation rather than treating each file individually.",
+            "--width",
+            default=7,
+            help="Width of the plot to make with default value 7 (inches)."
         )
 
 def weighted_pearson_ccfunc(df, iobs='Iobs', ipred='Ipred', sigiobs='SigIobs'):
@@ -59,10 +57,6 @@ def spearman_ccfunc(df, iobs='Iobs', ipred='Ipred'):
     return df[[iobs, ipred]].corr(method='spearman')[iobs][ipred]
 
 def run_analysis(args):
-    labels = None
-
-    overall = False
-
     ds = []
     for m in args.mtz:
         _ds = rs.read_mtz(m)
@@ -73,17 +67,9 @@ def run_analysis(args):
         _ds['Spacegroup'] = _ds.spacegroup.xhm()
         ds.append(_ds)
     ds = rs.concat(ds, check_isomorphous=False)
-    bins,edges = rs.utils.bin_by_percentile(ds.dHKL, args.bins, ascending=False)
-    ds['bin'] = bins
-    labels = [
-        f"{e1:0.2f} - {e2:0.2f}"
-        for e1, e2 in zip(edges[:-1], edges[1:])
-    ]
 
-    if args.overall:
-        grouper = ds.groupby(["bin", "test"])
-    else:
-        grouper = ds.groupby(["file", "bin", "test"])
+    ds['BATCH'] = (ds['image_id'] - ds.groupby("asu_id").transform("min")["image_id"] + 1).to_numpy()
+    grouper = ds.groupby(["file", "BATCH"])
 
     if args.method.lower() == "spearman":
         ccfunc = spearman_ccfunc
@@ -91,41 +77,31 @@ def run_analysis(args):
         ccfunc = weighted_pearson_ccfunc
 
     result = grouper.apply(ccfunc).reset_index(name='CCpred')
-    result['Resolution Range (Å)'] = np.array(labels)[result.bin]
-    result['Spacegroup'] = grouper['Spacegroup'].apply('first').to_numpy()
-    if not args.overall:
-        result['file'] = grouper['file'].apply('first').to_numpy()
-        result = result[['file', 'Resolution Range (Å)', 'bin', 'test', 'Spacegroup', 'CCpred']]
-    else:
-        result = result[['Resolution Range (Å)', 'bin', 'test', 'Spacegroup', 'CCpred']]
-
-    result['bin'] = result['bin'].to_numpy('int32')
-    result['test'] = np.array(['Train', 'Test'])[result['test']]
+    result['file_id'] = grouper.first()['file_id'].to_numpy()
+    result['asu_id'] = grouper.first()['asu_id'].to_numpy()
+    result = result[['file', 'file_id', 'asu_id', 'BATCH', 'CCpred']]
 
     if args.output is not None:
         result.to_csv(args.output)
     else:
         print(result.to_string())
 
+
     plot_kwargs = {
         'data' : result,
-        'x' : 'bin',
+        'x' : 'BATCH',
         'y' : 'CCpred',
-        'style' : 'test',
+        'hue' : 'file',
+        'marker' : '.',
+        'linestyle' : 'none',
+        'palette' : "Dark2",
     }
 
-    if args.overall:
-        plot_kwargs['color'] = 'k'
-    else:
-        plot_kwargs['hue'] = 'file'
-        plot_kwargs['palette'] = "Dark2"
-
+    plt.figure(figsize=(args.width, args.height))
     sns.lineplot(**plot_kwargs)
 
-    plt.xticks(range(args.bins), labels, rotation=45, ha="right", rotation_mode="anchor")
     plt.ylabel(r"$\mathrm{CC_{pred}}$ " + f"({args.method})")
     plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
-    plt.xlabel("Resolution ($\mathrm{\AA}$)")
     plt.grid(which='both', axis='both', ls='dashdot')
     plt.tight_layout()
 
