@@ -448,9 +448,10 @@ class DataManager():
                     parser.mlp_layers,
                     mlp_width,
                     epsilon=parser.epsilon,
+                    positive=parser.positive_scales,
                 )
             else:
-                mlp_scaler = MLPScaler(parser.mlp_layers, mlp_width, epsilon=parser.epsilon)
+                mlp_scaler = MLPScaler(parser.mlp_layers, mlp_width, epsilon=parser.epsilon, positive=parser.positive_scales)
                 if parser.use_image_scales:
                     n_images = np.max(BaseModel.get_image_id(self.inputs)) + 1
                     image_scaler = ImageScaler(n_images)

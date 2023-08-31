@@ -36,6 +36,11 @@ args_and_kwargs = (
         "default": 0,
     }),
 
+    (("--positive-scales",), {
+        "help": "Enforce positivity of the scale parameters.",
+        "action": "store_true",
+        "default": False,
+    }),
 
     (("--disable-image-scales",), {
         "help": "Do not learn a local scale param for each image.",

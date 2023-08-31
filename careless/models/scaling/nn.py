@@ -7,9 +7,10 @@ import numpy as np
 
 
 class NormalLayer(tf.keras.layers.Layer):
-    def __init__(self, scale_bijector=None, epsilon=1e-7, **kwargs): 
+    def __init__(self, scale_bijector=None, epsilon=1e-7, positive=False, **kwargs): 
         super().__init__(**kwargs)
         self.epsilon = epsilon
+        self.positive = positive
         if scale_bijector is None:
             self.scale_bijector = tfb.Chain([
                 tfb.Shift(epsilon),
@@ -21,6 +22,7 @@ class NormalLayer(tf.keras.layers.Layer):
     def call(self, x, **kwargs):
         loc, scale = tf.unstack(x, axis=-1)
         scale = self.scale_bijector(scale)
+        if self.positive: loc = self.scale_bijector(loc)
         return tfd.Normal(loc, scale)
 
 class MetadataScaler(Scaler):
@@ -28,7 +30,7 @@ class MetadataScaler(Scaler):
     Neural network based scaler with simple dense layers.
     This neural network outputs a normal distribution.
     """
-    def __init__(self, n_layers, width, leakiness=0.01, epsilon=1e-7):
+    def __init__(self, n_layers, width, leakiness=0.01, epsilon=1e-7, positive=False):
         """
         Parameters
         ----------
@@ -73,7 +75,7 @@ class MetadataScaler(Scaler):
 
         #The final layer converts the output to a Normal distribution
         #tfp_layers.append(tfp.layers.IndependentNormal())
-        tfp_layers.append(NormalLayer(epsilon=epsilon))
+        tfp_layers.append(NormalLayer(epsilon=epsilon, positive=positive))
 
         self.network = tf.keras.Sequential(mlp_layers)
         self.distribution = tf.keras.Sequential(tfp_layers)
