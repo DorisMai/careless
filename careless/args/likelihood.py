@@ -39,7 +39,7 @@ args_and_kwargs = (
         "help": "Set the weight of the term that regularizes crystal weights. "
                 "By default, there is no regularization.",
         "type": float, 
-        "default": 0.0,
+        "default": None,
     })
 )
 

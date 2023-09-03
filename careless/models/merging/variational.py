@@ -14,7 +14,7 @@ class VariationalMergingModel(BaseModel):
     """
     Merge data with a posterior parameterized by a surrogate distribution.
     """
-    def __init__(self, surrogate_posterior, prior, likelihood, scaling_model, mc_sample_size=1, wc_weight=0,
+    def __init__(self, surrogate_posterior, prior, likelihood, scaling_model, mc_sample_size=1, wc_weight=None,
                  kl_weight=None, scale_kl_weight=None, scale_prior=None):
         """"
         Parameters
@@ -175,18 +175,28 @@ class VariationalMergingModel(BaseModel):
         likelihood = self.likelihood(inputs)
 
         ll = likelihood.log_prob(ipred)
-        if self.kl_weight is None:
+        if self.kl_weight is None and self.wc_weight is None:
             self.add_kl_div(self.surrogate_posterior, self.prior, z_f, name='F KLDiv', reduction='sum')
             ll = tf.reduce_sum(ll) / self.mc_sample_size
         else:
-            self.add_kl_div(self.surrogate_posterior, self.prior, z_f, weight=self.kl_weight, name='F KLDiv', reduction='mean')
-            ll = tf.reduce_mean(ll) 
+            if self.wc_weight != None:
+                #average log likelihood over each crystal
+                file_id = self.get_file_id(inputs)
+                num_xtals = self.likelihood.num_files
+                reshaped_file_id = tf.broadcast_to(tf.transpose(file_id), ll.shape)
+                ll = tf.math.unsorted_segment_mean(ll, reshaped_file_id, num_xtals)
+                for i in range(self.likelihood.num_files):
+                    self.add_metric(-ll[i], name=f"xtal_{i}_NLL")
 
-        if self.wc_weight != 0:
-            num_xtals = tf.reduce_max(self.get_file_id(inputs))+1
-            wc_prior = tfd.Categorical(probs=tf.ones(num_xtals) / float(num_xtals))
-            wc_posterior = tfd.Categorical(probs=self.likelihood.norm_wc)
-            self.add_kl_div(wc_posterior, wc_prior, weight=self.wc_weight, name="Wc KLDiv", reduction='mean')
+                # add regularization loss for crystal weights
+                wc_prior = tfd.Categorical(probs=tf.ones(num_xtals) / float(num_xtals))
+                wc_posterior = tfd.Categorical(probs=self.likelihood.norm_wc)
+                self.add_kl_div(wc_posterior, wc_prior, weight=self.wc_weight, name="Wc KLDiv", reduction='mean')
+
+            if self.kl_weight is None: self.kl_weight = 1
+            self.add_kl_div(self.surrogate_posterior, self.prior, z_f, weight=self.kl_weight, name='F KLDiv', reduction='mean')
+            
+            ll = tf.reduce_mean(ll) 
 
         #Do some keras-y stuff
         self.add_loss(-ll)
