@@ -135,7 +135,8 @@ class WeightedLikelihood(LocationScaleLikelihood):
     def call(self, inputs):
         loc, scale = self.get_loc_and_scale(inputs)
         file_ids = self.get_file_id(inputs)
-        xtal_wc = tf.gather(self.norm_wc, file_ids) * self.num_files
+        xtal_wc = tf.gather(self.norm_wc, file_ids)
+        xtal_wc = xtal_wc / tf.reduce_mean(xtal_wc)
         base_dist = self.distribution(loc, scale)
         likelihood = WeightedLikelihoodDistribution(base_dist, xtal_wc)
         for i in range(self.num_files-1):
