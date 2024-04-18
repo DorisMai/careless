@@ -261,7 +261,10 @@ class VariationalMergingModel(BaseModel):
             train_step = tf.function(train_step, reduce_retracing=True)
 
         if validation_data is not None:
-            val_scale = len(data[0]) / len(validation_data[0])
+            if self.kl_weight is None:
+                val_scale = len(data[0]) / len(validation_data[0])
+            else:
+                val_scale = 1
 
         history = {}
         from tqdm import trange
