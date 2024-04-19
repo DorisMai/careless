@@ -47,11 +47,12 @@ class XtalWeightedLikelihood(LocationScaleLikelihood):
                                                   name='inv_raw_wc')
         self.loc = None
         self.scale = None
+        self.file_ids = None
 
     @property
     def inv_norm_wc(self):
         norm_wc_0 = 1 - tf.reduce_sum(1/self.inv_raw_wc)
-        return tf.concat([1/norm_wc_0, self.inv_raw_wc], axis=0)
+        return tf.concat([[1/norm_wc_0], self.inv_raw_wc], axis=0)
 
     def distribution(self, loc, scale):
         raise NotImplementedError("Weighted likelihoods must implement self.distribution \
@@ -59,26 +60,40 @@ class XtalWeightedLikelihood(LocationScaleLikelihood):
 
     def call(self, inputs):
         self.loc, self.scale = self.get_loc_and_scale(inputs)
-        file_ids = self.get_file_id(inputs)
-        invweight = tf.gather(self.inv_norm_wc, file_ids)
-        invweight = invweight / tf.reduce_mean(invweight)
-        reshaped_invweight = tf.broadcast_to(tf.transpose(invweight), inputs.shape)
-        base_dist = self.distribution(self.loc, self.scale * reshaped_invweight)
+        self.file_ids = self.get_file_id(inputs)
         for i in range(self.num_files-1):
             self.add_metric(self.inv_raw_wc[i], name=f'inv_raw_wc_{i}')
-        return base_dist
+        return self
+        # file_ids = self.get_file_id(inputs)
+        # invweight = tf.gather(self.inv_norm_wc, file_ids)
+        # invweight = invweight / tf.reduce_mean(invweight)
+        # # reshaped_invweight = tf.broadcast_to(tf.transpose(invweight), inputs.shape)
+        # base_dist = self.distribution(self.loc, self.scale * invweight)
+        # for i in range(self.num_files-1):
+        #     self.add_metric(self.inv_raw_wc[i], name=f'inv_raw_wc_{i}')
+        # return base_dist
+    
+    def corrected_sigiobs(self, ipred):
+        invweight = tf.gather(self.inv_norm_wc, self.file_ids)
+        invweight = invweight / tf.reduce_mean(invweight)
+        reshaped_invweight = tf.broadcast_to(tf.transpose(invweight), ipred.shape)
+        ipred = tf.math.softplus(ipred)
+        sigiobs = self.scale * reshaped_invweight
+        return sigiobs
     
 class NormalXtalWeightedLikelihood(XtalWeightedLikelihood):
-    def distribution(self, loc, scale):
-        return tfd.Normal(loc, scale)
+    def log_prob(self, ipred):
+        scale = self.corrected_sigiobs(ipred)
+        return tfd.Normal(self.loc, scale).log_prob(ipred)
 
 class StudentTXtalWeightedLikelihood(XtalWeightedLikelihood):
     def __init__(self, dof, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.dof = dof
 
-    def distribution(self, loc, scale):
-        return tfd.StudentT(self.dof, loc, scale)
+    def log_prob(self, ipred):
+        scale = self.corrected_sigiobs(ipred)
+        return tfd.StudentT(self.dof, self.loc, scale).log_prob(ipred)
 
 
 class Ev11Likelihood(LocationScaleLikelihood):
