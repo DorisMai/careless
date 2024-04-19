@@ -399,8 +399,8 @@ class DataManager():
                 from careless.models.likelihoods.mono import NormalEv11Likelihood as NormalLikelihood
                 from careless.models.likelihoods.mono import StudentTEv11Likelihood as StudentTLikelihood
             elif parser.multi_xtal_weighting:
-                from careless.models.likelihoods.mono import NormalWeightedLikelihood as NormalLikelihood
-                from careless.models.likelihoods.mono import StudentTWeightedLikelihood as StudentTLikelihood
+                from careless.models.likelihoods.mono import NormalXtalWeightedLikelihood as NormalLikelihood
+                from careless.models.likelihoods.mono import StudentTXtalWeightedLikelihood as StudentTLikelihood
             else:
                 from careless.models.likelihoods.mono import NormalLikelihood,StudentTLikelihood
 

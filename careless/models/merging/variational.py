@@ -190,7 +190,7 @@ class VariationalMergingModel(BaseModel):
 
                 # add regularization loss for crystal weights
                 wc_prior = tfd.Categorical(probs=tf.ones(num_xtals) / float(num_xtals))
-                wc_posterior = tfd.Categorical(probs=self.likelihood.norm_wc)
+                wc_posterior = tfd.Categorical(probs=1/self.likelihood.inv_norm_wc)
                 self.add_kl_div(wc_posterior, wc_prior, weight=self.wc_weight, name="Wc KLDiv", reduction='mean')
 
             if self.kl_weight is None: self.kl_weight = 1

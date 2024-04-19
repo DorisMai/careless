@@ -34,6 +34,53 @@ class StudentTLikelihood(LocationScaleLikelihood):
     def call(self, inputs):
         return tfd.StudentT(self.dof, *self.get_loc_and_scale(inputs))
 
+class XtalWeightedLikelihood(LocationScaleLikelihood):
+    def  __init__(self, num_files, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.num_files = num_files
+        self.inv_wc_bijector = tfb.Chain([
+                tfb.Shift(1.),
+                tfb.Softplus(),
+            ])
+        self.inv_raw_wc = tfu.TransformedVariable(tf.ones(self.num_files - 1)*self.num_files, 
+                                                  bijector=self.inv_wc_bijector, dtype=tf.float32,
+                                                  name='inv_raw_wc')
+        self.loc = None
+        self.scale = None
+
+    @property
+    def inv_norm_wc(self):
+        norm_wc_0 = 1 - tf.reduce_sum(1/self.inv_raw_wc)
+        return tf.concat([1/norm_wc_0, self.inv_raw_wc], axis=0)
+
+    def distribution(self, loc, scale):
+        raise NotImplementedError("Weighted likelihoods must implement self.distribution \
+                                  which should have a log_prob method.")
+
+    def call(self, inputs):
+        self.loc, self.scale = self.get_loc_and_scale(inputs)
+        file_ids = self.get_file_id(inputs)
+        invweight = tf.gather(self.inv_norm_wc, file_ids)
+        invweight = invweight / tf.reduce_mean(invweight)
+        reshaped_invweight = tf.broadcast_to(tf.transpose(invweight), inputs.shape)
+        base_dist = self.distribution(self.loc, self.scale * reshaped_invweight)
+        for i in range(self.num_files-1):
+            self.add_metric(self.inv_raw_wc[i], name=f'inv_raw_wc_{i}')
+        return base_dist
+    
+class NormalXtalWeightedLikelihood(XtalWeightedLikelihood):
+    def distribution(self, loc, scale):
+        return tfd.Normal(loc, scale)
+
+class StudentTXtalWeightedLikelihood(XtalWeightedLikelihood):
+    def __init__(self, dof, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.dof = dof
+
+    def distribution(self, loc, scale):
+        return tfd.StudentT(self.dof, loc, scale)
+
+
 class Ev11Likelihood(LocationScaleLikelihood):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -107,53 +154,53 @@ class NeuralNormalLikelihood(NeuralLikelihood):
     def base_dist(self, loc, scale):
         return tfd.Normal(loc, scale)
 
-class WeightedLikelihoodDistribution(BaseModel):
-    def __init__(self, base_distribution, weights):
-        #super().__init__()
-        self.base_distribution = base_distribution
-        self.xtal_weights = weights
+# class WeightedLikelihoodDistribution(BaseModel):
+#     def __init__(self, base_distribution, weights):
+#         #super().__init__()
+#         self.base_distribution = base_distribution
+#         self.xtal_weights = weights
 
-    def log_prob(self, data):
-        reshaped_weights = tf.broadcast_to(tf.transpose(self.xtal_weights), data.shape)
-        return reshaped_weights * self.base_distribution.log_prob(data)
+#     def log_prob(self, data):
+#         reshaped_weights = tf.broadcast_to(tf.transpose(self.xtal_weights), data.shape)
+#         return reshaped_weights * self.base_distribution.log_prob(data)
 
-class WeightedLikelihood(LocationScaleLikelihood):
-    def __init__(self, num_files):
-        super().__init__()
-        self.num_files = num_files
-        self.raw_wc = self.add_weight(shape=(self.num_files - 1,), initializer="zeros",
-                                      trainable=True, dtype=tf.float32, name='raw_wc')
+# class WeightedLikelihood(LocationScaleLikelihood):
+#     def __init__(self, num_files):
+#         super().__init__()
+#         self.num_files = num_files
+#         self.raw_wc = self.add_weight(shape=(self.num_files - 1,), initializer="zeros",
+#                                       trainable=True, dtype=tf.float32, name='raw_wc')
 
-    @property
-    def norm_wc(self):
-        return tf.nn.softmax(tf.concat([tf.constant([0.], dtype=tf.float32), self.raw_wc], axis=0))
+#     @property
+#     def norm_wc(self):
+#         return tf.nn.softmax(tf.concat([tf.constant([0.], dtype=tf.float32), self.raw_wc], axis=0))
 
-    def distribution(self, loc, scale):
-        raise NotImplementedError("Weighted likelihoods must implement self.distribution \
-                                  which should have a log_prob method.")
+#     def distribution(self, loc, scale):
+#         raise NotImplementedError("Weighted likelihoods must implement self.distribution \
+#                                   which should have a log_prob method.")
 
-    def call(self, inputs):
-        loc, scale = self.get_loc_and_scale(inputs)
-        file_ids = self.get_file_id(inputs)
-        xtal_wc = tf.gather(self.norm_wc, file_ids)
-        xtal_wc = xtal_wc / tf.reduce_mean(xtal_wc)
-        base_dist = self.distribution(loc, scale)
-        likelihood = WeightedLikelihoodDistribution(base_dist, xtal_wc)
-        for i in range(self.num_files-1):
-            self.add_metric(self.raw_wc[i], name=f'raw_wc_{i}')
-            # self.add_metric(self.norm_wc[i], name=f'norm_wc_{i}')
-        #tf.print(self.norm_wc, summarize=-1, output_stream='file://./logs/norm_weights.log')
-        #tf.print(self.raw_wc, summarize=-1, output_stream='file://./logs/raw_weights.log')
-        return likelihood
+#     def call(self, inputs):
+#         loc, scale = self.get_loc_and_scale(inputs)
+#         file_ids = self.get_file_id(inputs)
+#         xtal_wc = tf.gather(self.norm_wc, file_ids)
+#         xtal_wc = xtal_wc / tf.reduce_mean(xtal_wc)
+#         base_dist = self.distribution(loc, scale)
+#         likelihood = WeightedLikelihoodDistribution(base_dist, xtal_wc)
+#         for i in range(self.num_files-1):
+#             self.add_metric(self.raw_wc[i], name=f'raw_wc_{i}')
+#             # self.add_metric(self.norm_wc[i], name=f'norm_wc_{i}')
+#         #tf.print(self.norm_wc, summarize=-1, output_stream='file://./logs/norm_weights.log')
+#         #tf.print(self.raw_wc, summarize=-1, output_stream='file://./logs/raw_weights.log')
+#         return likelihood
     
-class NormalWeightedLikelihood(WeightedLikelihood):
-    def distribution(self, loc, scale):
-        return tfd.Normal(loc, scale)
+# class NormalWeightedLikelihood(WeightedLikelihood):
+#     def distribution(self, loc, scale):
+#         return tfd.Normal(loc, scale)
 
-class StudentTWeightedLikelihood(WeightedLikelihood):
-    def __init__(self, dof, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.dof = dof
+# class StudentTWeightedLikelihood(WeightedLikelihood):
+#     def __init__(self, dof, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#         self.dof = dof
 
-    def distribution(self, loc, scale):
-        return tfd.StudentT(self.dof, loc, scale)
+#     def distribution(self, loc, scale):
+#         return tfd.StudentT(self.dof, loc, scale)

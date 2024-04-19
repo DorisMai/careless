@@ -5,3 +5,7 @@
 *.swp
 .coverage
 coverage.xml
+.DS_Store
+build/
+dist/
+.gitignore
