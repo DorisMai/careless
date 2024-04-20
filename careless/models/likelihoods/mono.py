@@ -49,12 +49,13 @@ class XtalWeightedLikelihood(LocationScaleLikelihood):
         raise NotImplementedError("Weighted likelihoods must implement self.distribution \
                                   which should have a log_prob method.")
 
-    # @property
-    # def norm_inv_wc(self):
-    #     inv_wc = tf.concat([tf.constant([1.], dtype=tf.float32), self._inv_wc], axis=-1)
-    #     invweight = tf.gather(inv_wc, self.file_ids)
-    #     log_Z = tf.reduce_logsumexp(tf.math.log(invweight))
-    #     return tf.exp(inv_wc - log_Z)
+    @property
+    def norm_invweights(self):
+        inv_wc = tf.concat([tf.constant([1.], dtype=tf.float32), self._inv_wc], axis=-1)
+        invweight = tf.gather(inv_wc, self.file_ids)
+        log_Z = tf.reduce_logsumexp(tf.math.log(invweight))
+        norm_inv_wc = tf.exp(inv_wc - log_Z)
+        return tf.gather(norm_inv_wc, self.file_ids)
 
     def call(self, inputs):
         self.loc, self.scale = self.get_loc_and_scale(inputs)
@@ -63,20 +64,7 @@ class XtalWeightedLikelihood(LocationScaleLikelihood):
         return self
     
     def corrected_sigiobs(self, ipred):
-        inv_wc = tf.concat([tf.constant([1.], dtype=tf.float32), self._inv_wc], axis=-1)
-        invweight = tf.gather(inv_wc, self.file_ids)
-        log_Z = tf.reduce_logsumexp(tf.math.log(invweight))
-        norm_inv_wc = tf.exp(inv_wc - log_Z)
-        invweight = tf.gather(norm_inv_wc, self.file_ids)
-
-        # Compute wc KL divergence
-        wc_prior = tfd.Categorical(probs=tf.ones(self.num_reflections) / tf.cast(self.num_reflections, tf.float32))
-        wc_posterior = tfd.Categorical(probs=invweight)
-        kl_div = wc_posterior.kl_divergence(wc_prior)
-        wckl_loss = tf.reduce_mean(self.wckl_weight * kl_div)
-        self.add_loss(wckl_loss)
-        self.add_metric(wckl_loss, name='wckl_loss')
-
+        invweight = self.norm_invweights
         invweight *= tf.cast(self.num_reflections, tf.float32)
         reshaped_invweight = tf.broadcast_to(tf.transpose(invweight), ipred.shape)
         ipred = tf.math.softplus(ipred)
