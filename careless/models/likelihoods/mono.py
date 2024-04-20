@@ -35,12 +35,11 @@ class StudentTLikelihood(LocationScaleLikelihood):
         return tfd.StudentT(self.dof, *self.get_loc_and_scale(inputs))
 
 class XtalWeightedLikelihood(LocationScaleLikelihood):
-    def  __init__(self, num_files, wckl_weight, *args, **kwargs):
+    def  __init__(self, num_files, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.num_files = num_files
         self.num_reflections = None
         self._inv_wc = tf.Variable(tf.ones(self.num_files - 1))
-        self.wckl_weight = wckl_weight
         self.loc = None
         self.scale = None
         self.file_ids = None
@@ -51,16 +50,16 @@ class XtalWeightedLikelihood(LocationScaleLikelihood):
 
     @property
     def norm_invweights(self):
-        inv_wc = tf.concat([tf.constant([1.], dtype=tf.float32), self._inv_wc], axis=-1)
-        invweight = tf.gather(inv_wc, self.file_ids)
-        log_Z = tf.reduce_logsumexp(tf.math.log(invweight))
-        norm_inv_wc = tf.exp(inv_wc - log_Z)
-        return tf.gather(norm_inv_wc, self.file_ids)
+        inv_wc = tf.concat([tf.constant([1.], dtype=tf.float32), self._inv_wc], axis=0)
+        invweight = tf.squeeze(tf.gather(inv_wc, self.file_ids))
+        return tf.nn.softmax(invweight)
 
     def call(self, inputs):
         self.loc, self.scale = self.get_loc_and_scale(inputs)
         self.file_ids = self.get_file_id(inputs)
         self.num_reflections = self.file_ids.shape[0]
+        for i in range(self.num_files-1):
+            self.add_metric(self._inv_wc[i], name=f'raw_inv_wc_{i+1}')
         return self
     
     def corrected_sigiobs(self, ipred):
