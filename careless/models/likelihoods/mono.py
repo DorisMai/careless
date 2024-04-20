@@ -35,47 +35,51 @@ class StudentTLikelihood(LocationScaleLikelihood):
         return tfd.StudentT(self.dof, *self.get_loc_and_scale(inputs))
 
 class XtalWeightedLikelihood(LocationScaleLikelihood):
-    def  __init__(self, num_files, *args, **kwargs):
+    def  __init__(self, num_files, wckl_weight, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.num_files = num_files
-        self.inv_wc_bijector = tfb.Chain([
-                tfb.Shift(1.),
-                tfb.Softplus(),
-            ])
-        self.inv_raw_wc = tfu.TransformedVariable(tf.ones(self.num_files - 1)*self.num_files, 
-                                                  bijector=self.inv_wc_bijector, dtype=tf.float32,
-                                                  name='inv_raw_wc')
+        self.num_reflections = self.add_weight(name='num_reflections', shape=(), 
+                                               initializer='zeros', trainable=False,
+                                               dtype=tf.int32)
+        self._inv_wc = tf.Variable(tf.ones(self.num_files - 1))
+        self.wckl_weight = wckl_weight
         self.loc = None
         self.scale = None
         self.file_ids = None
-
-    @property
-    def inv_norm_wc(self):
-        norm_wc_0 = 1 - tf.reduce_sum(1/self.inv_raw_wc)
-        return tf.concat([[1/norm_wc_0], self.inv_raw_wc], axis=0)
 
     def distribution(self, loc, scale):
         raise NotImplementedError("Weighted likelihoods must implement self.distribution \
                                   which should have a log_prob method.")
 
+    # @property
+    # def norm_inv_wc(self):
+    #     inv_wc = tf.concat([tf.constant([1.], dtype=tf.float32), self._inv_wc], axis=-1)
+    #     invweight = tf.gather(inv_wc, self.file_ids)
+    #     log_Z = tf.reduce_logsumexp(tf.math.log(invweight))
+    #     return tf.exp(inv_wc - log_Z)
+
     def call(self, inputs):
         self.loc, self.scale = self.get_loc_and_scale(inputs)
         self.file_ids = self.get_file_id(inputs)
-        for i in range(self.num_files-1):
-            self.add_metric(self.inv_raw_wc[i], name=f'inv_raw_wc_{i}')
+        self.num_reflections = self.num_reflections.assign(self.file_ids.shape[0])
         return self
-        # file_ids = self.get_file_id(inputs)
-        # invweight = tf.gather(self.inv_norm_wc, file_ids)
-        # invweight = invweight / tf.reduce_mean(invweight)
-        # # reshaped_invweight = tf.broadcast_to(tf.transpose(invweight), inputs.shape)
-        # base_dist = self.distribution(self.loc, self.scale * invweight)
-        # for i in range(self.num_files-1):
-        #     self.add_metric(self.inv_raw_wc[i], name=f'inv_raw_wc_{i}')
-        # return base_dist
     
     def corrected_sigiobs(self, ipred):
-        invweight = tf.gather(self.inv_norm_wc, self.file_ids)
-        invweight = invweight / tf.reduce_mean(invweight)
+        inv_wc = tf.concat([tf.constant([1.], dtype=tf.float32), self._inv_wc], axis=-1)
+        invweight = tf.gather(inv_wc, self.file_ids)
+        log_Z = tf.reduce_logsumexp(tf.math.log(invweight))
+        norm_inv_wc = tf.exp(inv_wc - log_Z)
+        invweight = tf.gather(norm_inv_wc, self.file_ids)
+
+        # Compute wc KL divergence
+        wc_prior = tfd.Categorical(probs=tf.ones(self.num_reflections) / tf.cast(self.num_reflections, tf.float32))
+        wc_posterior = tfd.Categorical(probs=invweight)
+        kl_div = wc_posterior.kl_divergence(wc_prior)
+        wckl_loss = tf.reduce_mean(self.wckl_weight * kl_div)
+        self.add_loss(wckl_loss)
+        self.add_metric(wckl_loss, name='wckl_loss')
+
+        invweight *= tf.cast(self.num_reflections, tf.float32)
         reshaped_invweight = tf.broadcast_to(tf.transpose(invweight), ipred.shape)
         ipred = tf.math.softplus(ipred)
         sigiobs = self.scale * reshaped_invweight

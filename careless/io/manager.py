@@ -425,12 +425,12 @@ class DataManager():
             nxtals = BaseModel.get_file_id(self.inputs).max() + 1
             if dof is None:
                 if parser.multi_xtal_weighting:
-                    likelihood = NormalLikelihood(nxtals)
+                    likelihood = NormalLikelihood(nxtals, wckl_weight=parser.wc_regularize_weight)
                 else:
                     likelihood = NormalLikelihood()
             else:
                 if parser.multi_xtal_weighting:
-                    likelihood = StudentTLikelihood(dof, nxtals)
+                    likelihood = StudentTLikelihood(dof, nxtals, wckl_weight=parser.wc_regularize_weight)
                 else:
                     likelihood = StudentTLikelihood(dof)
 

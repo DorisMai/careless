@@ -188,10 +188,11 @@ class VariationalMergingModel(BaseModel):
                 for i in range(self.likelihood.num_files):
                     self.add_metric(-ll[i], name=f"xtal_{i}_NLL")
 
-                # add regularization loss for crystal weights
-                wc_prior = tfd.Categorical(probs=tf.ones(num_xtals) / float(num_xtals))
-                wc_posterior = tfd.Categorical(probs=1/self.likelihood.inv_norm_wc)
-                self.add_kl_div(wc_posterior, wc_prior, weight=self.wc_weight, name="Wc KLDiv", reduction='mean')
+                # # add regularization loss for crystal weights
+                # num_reflections = self.likelihood.num_reflections
+                # wc_prior = tfd.Categorical(probs=tf.ones(num_reflections) / tf.cast(num_reflections, tf.float32))
+                # wc_posterior = tfd.Categorical(probs=self.likelihood.invweight)
+                # self.add_kl_div(wc_posterior, wc_prior, weight=self.wc_weight, name="Wc KLDiv", reduction='mean')
 
             if self.kl_weight is None: self.kl_weight = 1
             self.add_kl_div(self.surrogate_posterior, self.prior, z_f, weight=self.kl_weight, name='F KLDiv', reduction='mean')
