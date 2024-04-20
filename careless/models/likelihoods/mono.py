@@ -38,9 +38,7 @@ class XtalWeightedLikelihood(LocationScaleLikelihood):
     def  __init__(self, num_files, wckl_weight, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.num_files = num_files
-        self.num_reflections = self.add_weight(name='num_reflections', shape=(), 
-                                               initializer='zeros', trainable=False,
-                                               dtype=tf.int32)
+        self.num_reflections = None
         self._inv_wc = tf.Variable(tf.ones(self.num_files - 1))
         self.wckl_weight = wckl_weight
         self.loc = None
@@ -61,7 +59,7 @@ class XtalWeightedLikelihood(LocationScaleLikelihood):
     def call(self, inputs):
         self.loc, self.scale = self.get_loc_and_scale(inputs)
         self.file_ids = self.get_file_id(inputs)
-        self.num_reflections = self.num_reflections.assign(self.file_ids.shape[0])
+        self.num_reflections = self.file_ids.shape[0]
         return self
     
     def corrected_sigiobs(self, ipred):
